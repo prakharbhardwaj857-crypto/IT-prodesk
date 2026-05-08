@@ -1,113 +1,63 @@
-// Select elements
-const balance = document.getElementById("balance");
-const money_plus = document.querySelector(".money-plus");
-const money_minus = document.querySelector(".money-minus");
-const list = document.getElementById("list");
-const form = document.getElementById("form");
-const text = document.getElementById("text");
-const amount = document.getElementById("amount");
+const input = document.getElementById("searchInput");
+const profile = document.getElementById("profile");
+const repos = document.getElementById("repos");
+const loading = document.getElementById("loading");
+const error = document.getElementById("error");
 
-// Local Storage
-const localStorageTransactions = JSON.parse(localStorage.getItem("transactions"));
+async function getUser() {
+  const username = input.value;
 
-let transactions = localStorage.getItem("transactions") !== null
-  ? localStorageTransactions
-  : [];
+  if (!username) return;
 
-// Add transaction
-function addTransaction(e) {
-    e.preventDefault();
+  loading.innerText = "Loading...";
+  error.innerText = "";
+  profile.innerHTML = "";
+  repos.innerHTML = "";
 
-    if (text.value.trim() === "" || amount.value.trim() === "") {
-        alert("Please enter text and amount");
-        return;
+  try {
+    const res = await fetch(`https://api.github.com/users/${username}`);
+
+    if (!res.ok) {
+      throw new Error("User not found");
     }
 
-    const transaction = {
-        id: generateID(),
-        text: text.value,
-        amount: +amount.value
-    };
+    const data = await res.json();
 
-    transactions.push(transaction);
+    showProfile(data);
+    getRepos(data.repos_url);
 
-    addTransactionDOM(transaction);
-    updateValues();
-    updateLocalStorage();
+  } catch (err) {
+    error.innerText = err.message;
+  }
 
-    text.value = "";
-    amount.value = "";
+  loading.innerText = "";
 }
 
-// Generate random ID
-function generateID() {
-    return Math.floor(Math.random() * 100000000);
+function showProfile(user) {
+  profile.innerHTML = `
+    <div class="card">
+      <img src="${user.avatar_url}" />
+      <h2>${user.name || user.login}</h2>
+      <p>${user.bio || "No bio available"}</p>
+      <p>Joined: ${new Date(user.created_at).toDateString()}</p>
+      <a href="${user.html_url}" target="_blank">Visit Profile</a>
+    </div>
+  `;
 }
 
-// Add transaction to DOM
-function addTransactionDOM(transaction) {
-    const sign = transaction.amount < 0 ? "-" : "+";
+async function getRepos(url) {
+  const res = await fetch(url);
+  const data = await res.json();
 
-    const item = document.createElement("li");
+  const latest = data.slice(0, 5);
 
-    item.classList.add(
-        transaction.amount < 0 ? "minus" : "plus"
-    );
+  repos.innerHTML = "<h3>Top Repositories</h3>";
 
-    item.innerHTML = `
-        ${transaction.text} 
-        <span>${sign}₹${Math.abs(transaction.amount)}</span>
-        <button class="delete-btn" onclick="removeTransaction(${transaction.id})">x</button>
+  latest.forEach(repo => {
+    repos.innerHTML += `
+      <div class="card">
+        <a href="${repo.html_url}" target="_blank">${repo.name}</a>
+      </div>
     `;
-
-    list.appendChild(item);
+  });
 }
-
-// Update balance, income, expense
-function updateValues() {
-    const amounts = transactions.map(t => t.amount);
-
-    const total = amounts.reduce((acc, item) => acc + item, 0).toFixed(2);
-
-    const income = amounts
-        .filter(item => item > 0)
-        .reduce((acc, item) => acc + item, 0)
-        .toFixed(2);
-
-    const expense = (
-        amounts
-        .filter(item => item < 0)
-        .reduce((acc, item) => acc + item, 0) * -1
-    ).toFixed(2);
-
-    balance.innerText = `₹${total}`;
-    money_plus.innerText = `+₹${income}`;
-    money_minus.innerText = `-₹${expense}`;
-}
-
-// Remove transaction
-function removeTransaction(id) {
-    transactions = transactions.filter(t => t.id !== id);
-
-    init();
-    updateLocalStorage();
-}
-
-// Update local storage
-function updateLocalStorage() {
-    localStorage.setItem("transactions", JSON.stringify(transactions));
-}
-
-// Init app
-function init() {
-    list.innerHTML = "";
-
-    transactions.forEach(addTransactionDOM);
-
-    updateValues();
-}
-
-init();
-
-// Event listener
-form.addEventListener("submit", addTransaction);
